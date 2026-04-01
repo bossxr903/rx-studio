@@ -9,6 +9,9 @@ import {
   Brain, Layers, Grid, Type, Eye, Droplet, Moon, Smartphone, Monitor
 } from 'lucide-react';
 
+// Create FileCheck alias since it's not available
+const FileCheck = FileText;
+
 export const toolsConfig = [
   // 💼 Productivity & Business (8 tools)
   { id: 'invoice-forge', path: '/tools/invoice-forge', name: 'Invoice Forge', description: 'Create professional invoices instantly.', icon: FileCheck, category: 'productivity' },
@@ -61,5 +64,10 @@ export const toolsConfig = [
   { id: 'screen-sizer', path: '/tools/screen-sizer', name: 'Screen Sizer', description: 'Test responsive designs.', icon: Monitor, category: 'design' },
 ];
 
-// Note: FileCheck needs to be imported - add this to imports
-const FileCheck = FileText; // Use FileText as fallback
+// Export getIconByName function (returns the icon component directly)
+export const getIconByName = (iconName) => {
+  // Since we're now storing actual components, this function is simplified
+  // But kept for backward compatibility
+  const tool = toolsConfig.find(t => t.id === iconName);
+  return tool ? tool.icon : Zap;
+};
