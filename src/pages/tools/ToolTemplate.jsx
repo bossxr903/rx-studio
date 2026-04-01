@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { toolsConfig, getIconByName } from '../../config/tools.config';
+import { toolsConfig } from '../../config/tools.config';
 import { Construction } from 'lucide-react';
 
 const ToolTemplate = () => {
@@ -16,7 +16,7 @@ const ToolTemplate = () => {
     );
   }
 
-  const IconComponent = getIconByName(tool.icon);
+  const IconComponent = tool.icon;
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12 w-full">
