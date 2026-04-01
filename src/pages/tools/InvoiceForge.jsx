@@ -1,434 +1,354 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Download, RefreshCcw, FileText, Settings, Building2, User } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import { useState } from "react";
 
-// Default empty state
-const initialState = {
-  invoiceNumber: 'INV-0001',
-  date: new Date().toISOString().split('T')[0],
-  dueDate: '',
-  currency: '$',
-  senderName: 'NX STUDIO',
-  senderEmail: 'hello@nxstudio.com',
-  senderAddress: '123 Tech Valley, San Francisco, CA',
-  clientName: '',
-  clientEmail: '',
-  clientAddress: '',
-  items: [
-    { id: 1, name: 'Web Design Services', qty: 1, price: 1500 }
-  ],
-  taxRate: 5, // Percentage
-  discount: 0 // Fixed amount
-};
+const CURRENCIES = ["USD", "EUR", "GBP", "BDT", "INR", "CAD", "AUD", "SGD"];
+const emptyItem = () => ({ id: Date.now() + Math.random(), desc: "", qty: 1, price: "" });
 
-export default function App() {
-  const [data, setData] = useState(initialState);
-  const [isClient, setIsClient] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const previewRef = useRef(null);
+export default function InvoiceForge() {
+  const [sender, setSender] = useState({ name: "", email: "", address: "", phone: "" });
+  const [client, setClient] = useState({ name: "", email: "", address: "", phone: "" });
+  const [meta, setMeta] = useState({
+    number: "INV-001",
+    date: new Date().toISOString().split("T")[0],
+    due: "",
+    currency: "USD",
+    notes: "",
+  });
+  const [items, setItems] = useState([emptyItem()]);
+  const [tax, setTax] = useState("");
+  const [discount, setDiscount] = useState("");
+  const [view, setView] = useState("edit");
 
-  // Load from LocalStorage on mount
-  useEffect(() => {
-    setIsClient(true);
-    const savedDraft = localStorage.getItem('invoiceForgeDraft');
-    if (savedDraft) {
-      try {
-        setData(JSON.parse(savedDraft));
-      } catch (e) {
-        console.error("Failed to parse draft", e);
-      }
-    }
-  }, []);
+  const subtotal = items.reduce((s, i) => s + (parseFloat(i.qty) || 0) * (parseFloat(i.price) || 0), 0);
+  const discAmt = (subtotal * (parseFloat(discount) || 0)) / 100;
+  const taxAmt = ((subtotal - discAmt) * (parseFloat(tax) || 0)) / 100;
+  const total = subtotal - discAmt + taxAmt;
+  const fmt = (n) => `${meta.currency} ${Number(n).toFixed(2)}`;
 
-  // Save to LocalStorage whenever data changes
-  useEffect(() => {
-    if (isClient) {
-      localStorage.setItem('invoiceForgeDraft', JSON.stringify(data));
-    }
-  }, [data, isClient]);
+  const addItem = () => setItems([...items, emptyItem()]);
+  const removeItem = (id) => items.length > 1 && setItems(items.filter((i) => i.id !== id));
+  const updateItem = (id, field, val) => setItems(items.map((i) => (i.id === id ? { ...i, [field]: val } : i)));
 
-  // Handlers
-  const handleUpdate = (field, value) => {
-    setData(prev => ({ ...prev, [field]: value }));
+  const saveDraft = () => {
+    localStorage.setItem("nxs_invoice", JSON.stringify({ sender, client, meta, items, tax, discount }));
+    alert("Draft saved!");
+  };
+  const loadDraft = () => {
+    const d = localStorage.getItem("nxs_invoice");
+    if (!d) return alert("No draft found.");
+    const p = JSON.parse(d);
+    setSender(p.sender); setClient(p.client); setMeta(p.meta);
+    setItems(p.items); setTax(p.tax); setDiscount(p.discount);
   };
 
-  const handleItemUpdate = (id, field, value) => {
-    setData(prev => ({
-      ...prev,
-      items: prev.items.map(item => 
-        item.id === id ? { ...item, [field]: field === 'name' ? value : parseFloat(value) || 0 } : item
-      )
-    }));
+  const S = {
+    page: { fontFamily: "'Outfit',sans-serif", minHeight: "100vh", background: "#f4f5f7", color: "#1a1a2e" },
+    nav: {
+      background: "#fff", borderBottom: "1.5px solid #ebebf3",
+      padding: "13px 24px", display: "flex", alignItems: "center",
+      justifyContent: "space-between", position: "sticky", top: 0, zIndex: 99,
+    },
+    logoBox: {
+      width: 34, height: 34, borderRadius: 9,
+      background: "linear-gradient(135deg,#5b5bd6,#8484f0)",
+      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+    },
+    logoText: { fontFamily: "'Fraunces',serif", fontSize: 17, color: "#1a1a2e", lineHeight: 1 },
+    logoSub: { fontSize: 10, color: "#bbb", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 },
+    btnPrimary: {
+      padding: "9px 18px", borderRadius: 9, border: "none", cursor: "pointer",
+      fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: "#fff",
+      background: "#5b5bd6", boxShadow: "0 2px 10px rgba(91,91,214,0.25)",
+      transition: "all 0.15s", display: "inline-flex", alignItems: "center", gap: 5,
+    },
+    btnOutline: {
+      padding: "9px 18px", borderRadius: 9, border: "1.5px solid #e0e0ea", cursor: "pointer",
+      fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: "#555",
+      background: "#fff", transition: "all 0.15s",
+    },
+    card: {
+      background: "#fff", borderRadius: 16, border: "1.5px solid #ebebf3",
+      padding: "22px 26px", marginBottom: 14,
+    },
+    sectionTitle: {
+      fontFamily: "'Fraunces',serif", fontSize: 16, color: "#1a1a2e",
+      marginBottom: 18, paddingBottom: 12, borderBottom: "1.5px solid #f2f2f8",
+    },
+    label: {
+      fontSize: 11, fontWeight: 700, letterSpacing: "0.07em",
+      textTransform: "uppercase", color: "#aaa", display: "block", marginBottom: 5,
+    },
+    input: {
+      width: "100%", background: "#fafafa", border: "1.5px solid #e8e9ee",
+      borderRadius: 9, padding: "9px 13px", fontFamily: "'Outfit',sans-serif",
+      fontSize: 13.5, color: "#1a1a2e", outline: "none",
+    },
+    grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 },
+    grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 },
   };
 
-  const addItem = () => {
-    const newItem = {
-      id: Date.now(),
-      name: '',
-      qty: 1,
-      price: 0
-    };
-    setData(prev => ({ ...prev, items: [...prev.items, newItem] }));
-  };
-
-  const removeItem = (id) => {
-    setData(prev => ({ ...prev, items: prev.items.filter(item => item.id !== id) }));
-  };
-
-  const clearDraft = () => {
-    if(confirm('Are you sure you want to clear the draft? This cannot be undone.')) {
-      setData(initialState);
-      localStorage.removeItem('invoiceForgeDraft');
-    }
-  };
-
-  // Calculations
-  const subtotal = data.items.reduce((sum, item) => sum + (item.qty * item.price), 0);
-  const taxAmount = (subtotal * (data.taxRate / 100));
-  const total = subtotal + taxAmount - data.discount;
-
-  // PDF Export Function
-  const exportPDF = async () => {
-    if (!previewRef.current) return;
-    setIsExporting(true);
-    
-    try {
-      const canvas = await html2canvas(previewRef.current, {
-        scale: 2, // Higher scale for better resolution
-        useCORS: true,
-        logging: false
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Invoice_${data.invoiceNumber || 'Draft'}.pdf`);
-    } catch (error) {
-      console.error("Error generating PDF", error);
-      alert("Failed to generate PDF. Please try again.");
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  if (!isClient) return null;
+  const Input = ({ label, value, onChange, type = "text", placeholder = "" }) => (
+    <div style={{ marginBottom: 12 }}>
+      <label style={S.label}>{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        style={S.input}
+        onFocus={e => { e.target.style.borderColor = "#5b5bd6"; e.target.style.boxShadow = "0 0 0 3px rgba(91,91,214,0.1)"; }}
+        onBlur={e => { e.target.style.borderColor = "#e8e9ee"; e.target.style.boxShadow = "none"; }}
+      />
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 md:p-8">
-      {/* Header */}
-      <header className="max-w-7xl mx-auto mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-3">
-          <div className="bg-indigo-600 p-2 rounded-lg text-white">
-            <FileText size={24} />
-          </div>
+    <div style={S.page}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fraunces:wght@700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white !important; }
+        }
+        @media (max-width: 640px) {
+          .grid2 { grid-template-columns: 1fr !important; }
+          .grid3 { grid-template-columns: 1fr !important; }
+          .item-grid { grid-template-columns: 1fr 60px 90px 34px !important; }
+        }
+        select { appearance: none; cursor: pointer; }
+        textarea { resize: vertical; }
+      `}</style>
+
+      {/* NAV */}
+      <div style={S.nav} className="no-print">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={S.logoBox}>📄</div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">InvoiceForge</h1>
-            <p className="text-sm text-slate-500 font-medium">by NX STUDIO</p>
+            <div style={S.logoSub}>NX Studio</div>
+            <div style={S.logoText}>InvoiceForge</div>
           </div>
         </div>
-        
-        <div className="flex gap-3">
-          <button 
-            onClick={clearDraft}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
-          >
-            <RefreshCcw size={16} />
-            Reset Draft
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={S.btnOutline} onClick={loadDraft}>Load</button>
+          <button style={S.btnOutline} onClick={saveDraft}>💾 Save</button>
+          <button style={S.btnOutline} onClick={() => setView(view === "edit" ? "preview" : "edit")}>
+            {view === "edit" ? "👁 Preview" : "✏️ Edit"}
           </button>
-          <button 
-            onClick={exportPDF}
-            disabled={isExporting}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            <Download size={16} />
-            {isExporting ? 'Generating PDF...' : 'Export PDF'}
-          </button>
+          <button style={S.btnPrimary} onClick={() => window.print()}>🖨️ PDF</button>
         </div>
-      </header>
+      </div>
 
-      {/* Main Layout */}
-      <main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* LEFT PANEL: EDITOR */}
-        <section className="lg:col-span-5 space-y-6">
-          
-          {/* Invoice Details Card */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <div className="flex items-center gap-2 mb-4 text-indigo-600">
-              <Settings size={18} />
-              <h2 className="font-semibold text-slate-800">Invoice Settings</h2>
+      {/* ── EDIT ── */}
+      {view === "edit" && (
+        <div style={{ maxWidth: 860, margin: "0 auto", padding: "24px 16px 60px" }}>
+
+          {/* Invoice Info */}
+          <div style={S.card}>
+            <div style={S.sectionTitle}>🧾 Invoice Details</div>
+            <div className="grid3" style={S.grid3}>
+              <Input label="Invoice No." value={meta.number} onChange={e => setMeta({ ...meta, number: e.target.value })} />
+              <Input label="Issue Date" type="date" value={meta.date} onChange={e => setMeta({ ...meta, date: e.target.value })} />
+              <Input label="Due Date" type="date" value={meta.due} onChange={e => setMeta({ ...meta, due: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Invoice No.</label>
-                <input 
-                  type="text" 
-                  value={data.invoiceNumber} 
-                  onChange={(e) => handleUpdate('invoiceNumber', e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Currency Symbol</label>
-                <input 
-                  type="text" 
-                  value={data.currency} 
-                  onChange={(e) => handleUpdate('currency', e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Date</label>
-                <input 
-                  type="date" 
-                  value={data.date} 
-                  onChange={(e) => handleUpdate('date', e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Due Date</label>
-                <input 
-                  type="date" 
-                  value={data.dueDate} 
-                  onChange={(e) => handleUpdate('dueDate', e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm"
-                />
-              </div>
+            <div style={{ maxWidth: 170 }}>
+              <label style={S.label}>Currency</label>
+              <select
+                value={meta.currency}
+                onChange={e => setMeta({ ...meta, currency: e.target.value })}
+                style={{ ...S.input, cursor: "pointer" }}
+              >
+                {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+              </select>
             </div>
           </div>
 
-          {/* Sender & Client Details Card */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Sender */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-indigo-600 mb-2">
-                    <Building2 size={18} />
-                    <h2 className="font-semibold text-slate-800">From (Sender)</h2>
-                  </div>
-                  <input placeholder="Your Company Name" value={data.senderName} onChange={(e) => handleUpdate('senderName', e.target.value)} className="w-full p-2 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
-                  <input placeholder="Email Address" value={data.senderEmail} onChange={(e) => handleUpdate('senderEmail', e.target.value)} className="w-full p-2 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
-                  <textarea placeholder="Address" value={data.senderAddress} onChange={(e) => handleUpdate('senderAddress', e.target.value)} rows="2" className="w-full p-2 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none" />
-                </div>
-                
-                {/* Client */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-indigo-600 mb-2">
-                    <User size={18} />
-                    <h2 className="font-semibold text-slate-800">To (Client)</h2>
-                  </div>
-                  <input placeholder="Client Name" value={data.clientName} onChange={(e) => handleUpdate('clientName', e.target.value)} className="w-full p-2 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
-                  <input placeholder="Client Email" value={data.clientEmail} onChange={(e) => handleUpdate('clientEmail', e.target.value)} className="w-full p-2 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
-                  <textarea placeholder="Client Address" value={data.clientAddress} onChange={(e) => handleUpdate('clientAddress', e.target.value)} rows="2" className="w-full p-2 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none" />
-                </div>
-             </div>
+          {/* From / To */}
+          <div className="grid2" style={S.grid2}>
+            {[
+              { title: "🏢 From (You)", data: sender, set: setSender },
+              { title: "👤 Bill To", data: client, set: setClient },
+            ].map(({ title, data, set }) => (
+              <div style={S.card} key={title}>
+                <div style={S.sectionTitle}>{title}</div>
+                {["name", "email", "phone", "address"].map(f => (
+                  <Input key={f} label={f} value={data[f]}
+                    placeholder={`Enter ${f}`}
+                    onChange={e => set({ ...data, [f]: e.target.value })} />
+                ))}
+              </div>
+            ))}
           </div>
 
-          {/* Items Card */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="font-semibold text-slate-800 mb-4">Line Items</h2>
-            
-            <div className="space-y-3 mb-4">
-              {data.items.map((item, index) => (
-                <div key={item.id} className="flex gap-2 items-start">
-                  <div className="flex-grow space-y-2">
-                    <input 
-                      placeholder="Item Description" 
-                      value={item.name} 
-                      onChange={(e) => handleItemUpdate(item.id, 'name', e.target.value)} 
-                      className="w-full p-2 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500" 
-                    />
-                    <div className="flex gap-2">
-                      <div className="w-1/3">
-                        <input 
-                          type="number" 
-                          min="1" 
-                          placeholder="Qty" 
-                          value={item.qty || ''} 
-                          onChange={(e) => handleItemUpdate(item.id, 'qty', e.target.value)} 
-                          className="w-full p-2 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500" 
-                        />
-                      </div>
-                      <div className="w-2/3">
-                        <input 
-                          type="number" 
-                          min="0" 
-                          placeholder="Price" 
-                          value={item.price || ''} 
-                          onChange={(e) => handleItemUpdate(item.id, 'price', e.target.value)} 
-                          className="w-full p-2 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500" 
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => removeItem(item.id)}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-md transition-colors mt-1"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
+          {/* Line Items */}
+          <div style={S.card}>
+            <div style={S.sectionTitle}>📦 Line Items</div>
+            <div className="item-grid" style={{ display: "grid", gridTemplateColumns: "1fr 80px 110px 36px", gap: 10, marginBottom: 10 }}>
+              {["Description", "Qty", "Price", ""].map(h => (
+                <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#bbb" }}>{h}</div>
               ))}
             </div>
-            
-            <button 
-              onClick={addItem}
-              className="w-full py-2 border-2 border-dashed border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-            >
-              <Plus size={16} /> Add Item
-            </button>
+            {items.map(item => (
+              <div key={item.id} className="item-grid" style={{ display: "grid", gridTemplateColumns: "1fr 80px 110px 36px", gap: 10, marginBottom: 8 }}>
+                <input style={S.input} value={item.desc} placeholder="Item description" onChange={e => updateItem(item.id, "desc", e.target.value)} />
+                <input style={{ ...S.input, textAlign: "center" }} type="number" min="1" value={item.qty} onChange={e => updateItem(item.id, "qty", e.target.value)} />
+                <input style={{ ...S.input, textAlign: "right" }} type="number" min="0" step="0.01" value={item.price} placeholder="0.00" onChange={e => updateItem(item.id, "price", e.target.value)} />
+                <button
+                  onClick={() => removeItem(item.id)}
+                  style={{ background: "#fff1f1", border: "1.5px solid #ffd5d5", color: "#e03e3e", borderRadius: 8, cursor: "pointer", fontSize: 16, fontWeight: 700 }}
+                >×</button>
+              </div>
+            ))}
+            <button style={{ ...S.btnOutline, marginTop: 8 }} onClick={addItem}>+ Add Item</button>
           </div>
 
-          {/* Tax & Discount */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">Tax Rate (%)</label>
-              <input 
-                type="number" 
-                min="0" 
-                value={data.taxRate || ''} 
-                onChange={(e) => handleUpdate('taxRate', parseFloat(e.target.value) || 0)}
-                className="w-full p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
-              />
+          {/* Summary */}
+          <div style={S.card}>
+            <div style={S.sectionTitle}>💰 Summary</div>
+            <div className="grid2" style={{ ...S.grid2, marginBottom: 20 }}>
+              <Input label="Discount (%)" type="number" value={discount} placeholder="0" onChange={e => setDiscount(e.target.value)} />
+              <Input label="Tax (%)" type="number" value={tax} placeholder="0" onChange={e => setTax(e.target.value)} />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">Discount Amount</label>
-              <input 
-                type="number" 
-                min="0" 
-                value={data.discount || ''} 
-                onChange={(e) => handleUpdate('discount', parseFloat(e.target.value) || 0)}
-                className="w-full p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
-              />
-            </div>
-          </div>
-
-        </section>
-
-        {/* RIGHT PANEL: LIVE PREVIEW */}
-        <section className="lg:col-span-7">
-          <div className="sticky top-8">
-            <div className="mb-4 flex justify-between items-center px-2">
-              <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Live Preview</h2>
-            </div>
-            
-            {/* INVOICE PAPER (This section is exported to PDF) */}
-            <div 
-              ref={previewRef}
-              className="bg-white p-8 sm:p-12 rounded-lg shadow-lg border border-slate-200 min-h-[800px] flex flex-col"
-              style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}
-            >
-              {/* Invoice Header */}
-              <div className="flex justify-between items-start mb-12 border-b border-slate-100 pb-8">
-                <div>
-                  <h1 className="text-4xl font-bold text-slate-900 tracking-tight mb-2">INVOICE</h1>
-                  <p className="text-slate-500 font-medium">#{data.invoiceNumber || 'INV-0000'}</p>
+            <div style={{ maxWidth: 290, marginLeft: "auto" }}>
+              {[
+                { label: "Subtotal", val: fmt(subtotal), color: "#333" },
+                parseFloat(discount) > 0 ? { label: `Discount (${discount}%)`, val: `− ${fmt(discAmt)}`, color: "#e03e3e" } : null,
+                parseFloat(tax) > 0 ? { label: `Tax (${tax}%)`, val: fmt(taxAmt), color: "#333" } : null,
+              ].filter(Boolean).map(row => (
+                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px dashed #f0f0f8", fontSize: 14 }}>
+                  <span style={{ color: "#888" }}>{row.label}</span>
+                  <span style={{ fontWeight: 600, color: row.color }}>{row.val}</span>
                 </div>
-                <div className="text-right">
-                  <h2 className="text-xl font-bold text-slate-800">{data.senderName || 'Your Company'}</h2>
-                  <p className="text-slate-500 whitespace-pre-line text-sm mt-1">{data.senderAddress}</p>
-                  <p className="text-slate-500 text-sm mt-1">{data.senderEmail}</p>
-                </div>
+              ))}
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "14px 18px", marginTop: 12,
+                background: "linear-gradient(135deg,#5b5bd6,#8484f0)",
+                borderRadius: 12, color: "#fff",
+              }}>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>Total Due</span>
+                <span style={{ fontWeight: 700, fontSize: 21 }}>{fmt(total)}</span>
               </div>
-
-              {/* Invoice Meta */}
-              <div className="flex justify-between mb-12">
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Bill To</p>
-                  <h3 className="text-lg font-bold text-slate-800">{data.clientName || 'Client Name'}</h3>
-                  <p className="text-slate-600 whitespace-pre-line text-sm mt-1">{data.clientAddress || 'Client Address'}</p>
-                  <p className="text-slate-600 text-sm mt-1">{data.clientEmail || 'Client Email'}</p>
-                </div>
-                <div className="text-right flex flex-col gap-2">
-                  <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Invoice Date</p>
-                    <p className="text-slate-800 font-medium text-sm">{data.date || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Due Date</p>
-                    <p className="text-slate-800 font-medium text-sm">{data.dueDate || '-'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Items Table */}
-              <div className="flex-grow">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b-2 border-slate-800">
-                      <th className="py-3 text-sm font-bold text-slate-800 uppercase tracking-wide">Description</th>
-                      <th className="py-3 text-sm font-bold text-slate-800 uppercase tracking-wide text-center">Qty</th>
-                      <th className="py-3 text-sm font-bold text-slate-800 uppercase tracking-wide text-right">Price</th>
-                      <th className="py-3 text-sm font-bold text-slate-800 uppercase tracking-wide text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.items.length === 0 && (
-                      <tr>
-                        <td colSpan="4" className="py-8 text-center text-slate-400 text-sm">No items added yet.</td>
-                      </tr>
-                    )}
-                    {data.items.map((item, index) => (
-                      <tr key={index} className="border-b border-slate-100 last:border-0">
-                        <td className="py-4 text-sm text-slate-800">{item.name || 'Untitled Item'}</td>
-                        <td className="py-4 text-sm text-slate-600 text-center">{item.qty}</td>
-                        <td className="py-4 text-sm text-slate-600 text-right">{data.currency}{Number(item.price).toFixed(2)}</td>
-                        <td className="py-4 text-sm text-slate-800 font-medium text-right">
-                          {data.currency}{(item.qty * item.price).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Totals Section */}
-              <div className="mt-8 flex justify-end border-t border-slate-100 pt-6">
-                <div className="w-full sm:w-1/2 md:w-1/3 space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500 font-medium">Subtotal</span>
-                    <span className="text-slate-800">{data.currency}{subtotal.toFixed(2)}</span>
-                  </div>
-                  {data.taxRate > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500 font-medium">Tax ({data.taxRate}%)</span>
-                      <span className="text-slate-800">{data.currency}{taxAmount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  {data.discount > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500 font-medium">Discount</span>
-                      <span className="text-red-500">-{data.currency}{data.discount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-lg font-bold border-t border-slate-800 pt-3 mt-3">
-                    <span className="text-slate-900">Total</span>
-                    <span className="text-indigo-600">{data.currency}{total.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="mt-16 text-center text-slate-400 text-xs border-t border-slate-100 pt-8 pb-4">
-                Thank you for your business. Generated by NX STUDIO InvoiceForge.
-              </div>
-
             </div>
           </div>
-        </section>
 
-      </main>
+          {/* Notes */}
+          <div style={S.card}>
+            <div style={S.sectionTitle}>📝 Notes</div>
+            <textarea
+              style={{ ...S.input, minHeight: 80 }}
+              rows={3}
+              value={meta.notes}
+              placeholder="Payment terms, bank details, thank you message..."
+              onChange={e => setMeta({ ...meta, notes: e.target.value })}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── PREVIEW ── */}
+      {view === "preview" && (
+        <div style={{ padding: "28px 16px 60px" }}>
+          <div style={{
+            maxWidth: 720, margin: "0 auto", background: "#fff",
+            borderRadius: 18, padding: "50px 56px",
+            boxShadow: "0 8px 50px rgba(0,0,0,0.09)", border: "1.5px solid #ebebf3",
+          }}>
+            {/* Top */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 40 }}>
+              <div>
+                <div style={{ fontFamily: "'Fraunces',serif", fontSize: 44, fontWeight: 700, color: "#1a1a2e", lineHeight: 1 }}>INVOICE</div>
+                <div style={{ marginTop: 6, color: "#bbb", fontSize: 13, fontWeight: 500 }}>{meta.number}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a2e" }}>{sender.name || "Your Name"}</div>
+                <div style={{ fontSize: 13, color: "#888", marginTop: 3 }}>{sender.email}</div>
+                <div style={{ fontSize: 13, color: "#888" }}>{sender.phone}</div>
+                <div style={{ fontSize: 13, color: "#888" }}>{sender.address}</div>
+              </div>
+            </div>
+
+            <div style={{ height: 3, background: "linear-gradient(90deg,#5b5bd6,#a5a5ff,transparent)", borderRadius: 3, marginBottom: 36 }} />
+
+            {/* Bill To + Dates */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 40 }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#bbb", marginBottom: 7 }}>Bill To</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#1a1a2e" }}>{client.name || "Client"}</div>
+                <div style={{ fontSize: 13, color: "#888", marginTop: 3 }}>{client.email}</div>
+                <div style={{ fontSize: 13, color: "#888" }}>{client.phone}</div>
+                <div style={{ fontSize: 13, color: "#888" }}>{client.address}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#bbb", marginBottom: 3 }}>Issue Date</div>
+                  <div style={{ fontWeight: 600, color: "#1a1a2e", fontSize: 14 }}>{meta.date}</div>
+                </div>
+                {meta.due && <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#bbb", marginBottom: 3 }}>Due Date</div>
+                  <div style={{ fontWeight: 600, color: "#e03e3e", fontSize: 14 }}>{meta.due}</div>
+                </div>}
+              </div>
+            </div>
+
+            {/* Table */}
+            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 28 }}>
+              <thead>
+                <tr style={{ background: "#f4f4fd" }}>
+                  {[["Description", "left"], ["Qty", "right"], ["Price", "right"], ["Total", "right"]].map(([h, align]) => (
+                    <th key={h} style={{ padding: "10px 14px", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#5b5bd6", textAlign: align }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, i) => (
+                  <tr key={item.id} style={{ borderBottom: "1px solid #f2f2f8" }}>
+                    <td style={{ padding: "12px 14px", fontSize: 13.5, color: "#333" }}>{item.desc || "—"}</td>
+                    <td style={{ padding: "12px 14px", fontSize: 13.5, color: "#666", textAlign: "right" }}>{item.qty}</td>
+                    <td style={{ padding: "12px 14px", fontSize: 13.5, color: "#666", textAlign: "right" }}>{fmt(parseFloat(item.price) || 0)}</td>
+                    <td style={{ padding: "12px 14px", fontSize: 13.5, fontWeight: 600, color: "#1a1a2e", textAlign: "right" }}>{fmt((parseFloat(item.qty) || 0) * (parseFloat(item.price) || 0))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Totals */}
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div style={{ minWidth: 260 }}>
+                {[
+                  { label: "Subtotal", val: fmt(subtotal) },
+                  parseFloat(discount) > 0 ? { label: `Discount (${discount}%)`, val: `− ${fmt(discAmt)}`, red: true } : null,
+                  parseFloat(tax) > 0 ? { label: `Tax (${tax}%)`, val: fmt(taxAmt) } : null,
+                ].filter(Boolean).map(row => (
+                  <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", fontSize: 13.5, borderBottom: "1px dashed #f0f0f8" }}>
+                    <span style={{ color: "#888" }}>{row.label}</span>
+                    <span style={{ fontWeight: 500, color: row.red ? "#e03e3e" : "#1a1a2e" }}>{row.val}</span>
+                  </div>
+                ))}
+                <div style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "13px 18px", marginTop: 10,
+                  background: "linear-gradient(135deg,#5b5bd6,#8484f0)",
+                  borderRadius: 12, color: "#fff",
+                }}>
+                  <span style={{ fontWeight: 700, fontSize: 14 }}>Total Due</span>
+                  <span style={{ fontWeight: 700, fontSize: 21 }}>{fmt(total)}</span>
+                </div>
+              </div>
+            </div>
+
+            {meta.notes && (
+              <div style={{ marginTop: 36, padding: "16px 20px", background: "#f8f8fd", borderLeft: "3px solid #5b5bd6", borderRadius: "0 10px 10px 0" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#bbb", marginBottom: 6 }}>Notes</div>
+                <div style={{ fontSize: 13, color: "#555", lineHeight: 1.75 }}>{meta.notes}</div>
+              </div>
+            )}
+
+            <div style={{ marginTop: 44, paddingTop: 20, borderTop: "1px solid #f0f0f8", textAlign: "center", fontSize: 11, color: "#ddd" }}>
+              Generated with InvoiceForge · NX Studio
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
