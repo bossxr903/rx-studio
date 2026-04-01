@@ -1,9 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { getIconByName } from '../config/tools.config';
 
 const ToolCard = ({ tool }) => {
-  const IconComponent = getIconByName(tool.icon);
+  const IconComponent = tool.icon;
 
   return (
     <Link to={tool.path}>
