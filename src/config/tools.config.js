@@ -5,16 +5,14 @@ import {
   Calendar, Clock, Link, Image, Film, Mic, Headphones, Book, 
   Star, Heart, Flag, Award, Briefcase, DollarSign, GraduationCap, 
   Activity, Palette, TrendingUp, Timer, Bookmark, BarChart, 
-  Receipt, Coins, Landmark, Handshake, CreditCard, Lightbulb, 
-  Brain, Layers, Grid, Type, Eye, Droplet, Moon, Smartphone, Monitor
+  Receipt, Coins, Landmark, CreditCard, Lightbulb, Brain, 
+  Layers, Grid, Type, Eye, Droplet, Moon, Smartphone, Monitor,
+  UserPlus, Globe, PenTool, Ruler, Crop
 } from 'lucide-react';
-
-// Create FileCheck alias since it's not available
-const FileCheck = FileText;
 
 export const toolsConfig = [
   // 💼 Productivity & Business (8 tools)
-  { id: 'invoice-forge', path: '/tools/invoice-forge', name: 'Invoice Forge', description: 'Create professional invoices instantly.', icon: FileCheck, category: 'productivity' },
+  { id: 'invoice-forge', path: '/tools/invoice-forge', name: 'Invoice Forge', description: 'Create professional invoices instantly.', icon: FileText, category: 'productivity' },
   { id: 'resume-rocket', path: '/tools/resume-rocket', name: 'Resume Rocket', description: 'Build ATS friendly resumes quickly.', icon: FileText, category: 'productivity' },
   { id: 'contract-craft', path: '/tools/contract-craft', name: 'Contract Craft', description: 'Generate legal contracts easily.', icon: FileText, category: 'productivity' },
   { id: 'meet-mate', path: '/tools/meet-mate', name: 'Meet Mate', description: 'Schedule meetings effortlessly.', icon: Calendar, category: 'productivity' },
@@ -28,7 +26,7 @@ export const toolsConfig = [
   { id: 'loan-lens', path: '/tools/loan-lens', name: 'Loan Lens', description: 'Calculate loan payments and interest.', icon: Landmark, category: 'finance' },
   { id: 'coin-flip', path: '/tools/coin-flip', name: 'Coin Flip', description: 'Make decisions with coin toss.', icon: Coins, category: 'finance' },
   { id: 'tax-tally', path: '/tools/tax-tally', name: 'Tax Tally', description: 'Calculate your tax returns.', icon: Receipt, category: 'finance' },
-  { id: 'split-ease', path: '/tools/split-ease', name: 'Split Ease', description: 'Split bills with friends.', icon: Handshake, category: 'finance' },
+  { id: 'split-ease', path: '/tools/split-ease', name: 'Split Ease', description: 'Split bills with friends.', icon: Users, category: 'finance' },
   { id: 'net-worth-now', path: '/tools/net-worth-now', name: 'Net Worth Now', description: 'Calculate your net worth.', icon: TrendingUp, category: 'finance' },
   { id: 'freelance-fee', path: '/tools/freelance-fee', name: 'Freelance Fee', description: 'Calculate freelance rates.', icon: CreditCard, category: 'finance' },
   { id: 'expense-snap', path: '/tools/expense-snap', name: 'Expense Snap', description: 'Scan and track receipts.', icon: Camera, category: 'finance' },
@@ -64,10 +62,8 @@ export const toolsConfig = [
   { id: 'screen-sizer', path: '/tools/screen-sizer', name: 'Screen Sizer', description: 'Test responsive designs.', icon: Monitor, category: 'design' },
 ];
 
-// Export getIconByName function (returns the icon component directly)
+// Export getIconByName function
 export const getIconByName = (iconName) => {
-  // Since we're now storing actual components, this function is simplified
-  // But kept for backward compatibility
   const tool = toolsConfig.find(t => t.id === iconName);
   return tool ? tool.icon : Zap;
 };
