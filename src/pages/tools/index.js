@@ -1,12 +1,9 @@
-// Import the template for all tools initially
+// Import actual tool files here as you build them
+import InvoiceForge from './InvoiceForge';
 import ToolTemplate from './ToolTemplate';
 
-// When you create actual tool files, import them here:
-// import InvoiceForge from './InvoiceForge';
-// import ResumeRocket from './ResumeRocket';
+export { InvoiceForge };
 
-// All tools use the coming soon template by default
-export const InvoiceForge = ToolTemplate;
 export const ResumeRocket = ToolTemplate;
 export const ContractCraft = ToolTemplate;
 export const MeetMate = ToolTemplate;
